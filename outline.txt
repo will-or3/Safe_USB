@@ -1,0 +1,13 @@
+1. ask for filename or raw block device
+2. ask for pwd (twice)
+3. gen 64 bytes random salt
+4. derive two 256-bit keys from pwd useing argod2id:
+        master encryption key (MEK) - 512 bits total for XTS (256-bit key + 256 bit tweak key)
+        header key                  - 256 bits (used only to ecnrypt/decrypt the header itself)
+5. generate random MEK
+6. build the 512 byte -> 131072 byte header structure:
+        magic string "VERA"
+        salt (64 bytes)
+        KDF parameters (argod2 memory, iterations, etc)
+        encrypt MEK (encrypted with the header key)
+        HMAC everything above
