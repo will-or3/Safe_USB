@@ -1,0 +1,40 @@
+Lets make a plan on this one,
+
+
+Design:
+
+Checks if the proprietary header exists (random and tied to file) [so it can see if its already there]
+
+If is the first use:
+	*let the user specify external drive, or file on device
+	*create gpt .img file either in size of external drive, or file size specified
+	*allow user to specify size of normal &/or encrypted volume(should they be volumes or partitions?)
+	*encrypt each volume / partition
+	let the user specify each password for each purpose 
+	maybe store the hashes somewhere ?
+	
+
+If the proprietary header is noticed:
+	*bring user to prompt
+	*let them type a password, it checks if it opens either of the partitions
+	if its either of the partitions, mount that
+	if its the self destruct password, destroy the header
+	
+
+
+Development:
+
+Make a program which creates and mounts a fake_usb.img file
+
+
+Make a program which encrypts fake_usb.img ->
+
+Make a program which encrypts the usb header so the os can't read it, also make a program which reads the header, so that if it were on a real usb the os wouldn't read it 
+
+Create two encrypted partitions/volumes
+
+Create a cli 
+
+Create a self destruct feature which just deletes the header 
+
+Test on real hardware
