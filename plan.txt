@@ -38,3 +38,22 @@ Create a cli
 Create a self destruct feature which just deletes the header 
 
 Test on real hardware
+
+
+[x] create image
+[x] custom header
+[x] read header
+[x] volume metadata
+[x] hidden volume size option
+
+[ ] format normal volume
+[ ] format hidden volume
+[ ] mount normal volume
+[ ] mount hidden volume
+
+[ ] add encryption
+[ ] add password handling
+[ ] add unlock process
+[ ] add self-destruct behavior
+
+[ ] real USB 

@@ -2,6 +2,7 @@
 // ./fake_usb create fake_usb.img 5G (for no hidden)
 // ./fake_usb create fake_usb.img 5G --hidden 2G
 // ./fake_usb info fake_usb.img
+// sudo ./fake_usb format fake_usb.img
 
 #define _FILE_OFFSET_BITS 64
 
@@ -11,6 +12,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+
+// loop headers for formatting
+#include <linux/loop.h>
+#include <sys/ioctl.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 
 
 typedef struct __attribute__((packed)) {
@@ -83,11 +91,7 @@ int allocate(const char *file_name, off_t size, off_t hidden_size){
         return 1;
     }
     
-    if (posix_fallocate(fd, 0, size) != 0) {
-        perror("posix_fallocate");
-        close(fd);
-        return 1;
-    }
+    posix_fallocate(fd, 0, size);
 
     Header header = {0};
 
@@ -160,7 +164,115 @@ int info(const char *file_name) {
         return 0;
 }
 
-//int format(){}
+int get_loop_device(){
+    int control = open("/dev/loop-control", O_RDWR);
+
+    if (control < 0) {
+        perror("loop-control error");
+        return -1;
+    }
+
+    int number = ioctl(control, LOOP_CTL_GET_FREE);
+
+    close(control);
+
+    return number;
+}
+
+
+int format_volume(const char *file_name, uint64_t offset, uint64_t size){
+
+    // get free loop device
+    int loop_num = get_loop_device();
+
+    if (loop_num < 0) {
+        return 1;
+    }
+
+    char loop_path[64];
+
+    snprintf(loop_path, sizeof(loop_path), "/dev/loop%d", loop_num);
+
+    printf("useing %s\n", loop_path);
+
+    int img_fd = open(file_name, O_RDWR);
+
+    int loop_fd = open(loop_path, O_RDWR);
+
+    // configure loop device
+
+    struct loop_config config = {0};
+
+    config.fd = img_fd;
+    config.block_size = 4096;
+
+    config.info.lo_offset = offset;
+    config.info.lo_sizelimit = size;
+
+    ioctl(loop_fd, LOOP_CONFIGURE, &config);
+
+    // run mkfs.ext4
+
+     pid_t pid = fork();
+
+    if (pid == 0) {
+
+        execlp(
+            "mkfs.ext4",
+            "mkfs.ext4",
+            loop_path,
+            NULL
+        );
+
+        perror("mkfs.ext4");
+        exit(1);
+    }
+
+    wait(NULL);
+
+
+    // cleanup
+    ioctl(loop_fd, LOOP_CLR_FD, 0);
+
+    close(loop_fd);
+    close(img_fd);
+
+    return 0;
+}
+
+int format(const char *file_name){
+    int fd = open(file_name, O_RDWR);
+    
+    Header header;
+
+    if (read_header(fd, &header) != 0) {
+        printf("Not a SAFEUSB image\n");
+        close(fd);
+        return 1;
+    }
+
+    format_volume(
+        file_name,
+        header.normal_offset,
+        header.normal_size
+    );
+
+
+    // format hidden volume if it exists
+    if (header.hidden_size > 0) {
+
+        format_volume(
+            file_name,
+            header.hidden_offset,
+            header.hidden_size
+        );
+
+    }
+
+    close(fd);
+
+    return 0;
+}
 
 int main(int argc, char *argv[]){
     if (argc < 2) {
@@ -172,8 +284,10 @@ int main(int argc, char *argv[]){
     else if (strcmp(argv[1], "info") == 0) {
         if (argc != 3)
             goto usage;
-    }
-    else {
+    } else if (strcmp(argv[1], "format") == 0) {
+        if (argc != 3)
+            goto usage; 
+    } else {
         goto usage;
     }
 
@@ -185,20 +299,25 @@ int main(int argc, char *argv[]){
     off_t hidden_size = 0;
 
     if (argc == 6 &&
-        strcmp(argv[4], "--hidden") == 0)
-    {
+        strcmp(argv[4], "--hidden") == 0){
         hidden_size = parse_size(argv[5]);
     }
 
     return allocate(file_name, size, hidden_size);
+    
     } else if (strcmp(argv[1], "info") == 0) {
         return info(file_name);
-    } else {
+    }
+    else if (strcmp(argv[1], "format") == 0) {
+        return format(file_name); 
+    }
+     else {
         goto usage;
     }
 
     usage:
         fprintf(stderr, "Usage: %s create <filename> <size[K|M|G]>\n", argv[0]);
         fprintf(stderr, "Usage: %s info <filename>\n", argv[0]);
+        fprintf(stderr, "Usage: %s format <filename>\n", argv[0]);
         return 1;
 }
