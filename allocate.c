@@ -54,7 +54,7 @@ int write_header(int fd, Header *header) {
     // set to first (0) btye 
     lseek(fd, 0, SEEK_SET);
 
-    write(fd, header, sizeof(header));
+    write(fd, header, sizeof(*header));
     fsync(fd);
 
     return 0;
@@ -91,7 +91,7 @@ int allocate(const char *file_name, off_t size, off_t hidden_size){
 
     Header header = {0};
 
-    memcpy(header.magic, "SAFEUSB", 7);
+    memcpy(header.magic, "SAFEUSB", 8);
     header.version = 1;
 
     header.normal_offset = sizeof(Header);
