@@ -20,6 +20,8 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
+#include <sys/mount.h>
+
 
 typedef struct __attribute__((packed)) {
     char magic[8];
@@ -98,7 +100,7 @@ int allocate(const char *file_name, off_t size, off_t hidden_size){
     memcpy(header.magic, "SAFEUSB", 8);
     header.version = 1;
 
-    header.normal_offset = sizeof(Header);
+    header.normal_offset = 4096;
 
     if (hidden_size > 0) {
 
@@ -209,7 +211,13 @@ int format_volume(const char *file_name, uint64_t offset, uint64_t size){
     config.info.lo_offset = offset;
     config.info.lo_sizelimit = size;
 
-    ioctl(loop_fd, LOOP_CONFIGURE, &config);
+    //ioctl(loop_fd, LOOP_CONFIGURE, &config);
+    if (ioctl(loop_fd, LOOP_CONFIGURE, &config) < 0) {
+        perror("LOOP_CONFIGURE");
+        close(loop_fd);
+        close(img_fd);
+        return 1;
+    }
 
     // run mkfs.ext4
 
@@ -231,12 +239,15 @@ int format_volume(const char *file_name, uint64_t offset, uint64_t size){
     wait(NULL);
 
 
-    // cleanup
+    wait(NULL);
+
+    printf("Filesystem created on %s\n", loop_path);
+    printf("Press enter to detach loop device...\n");
+    getchar();
     ioctl(loop_fd, LOOP_CLR_FD, 0);
 
     close(loop_fd);
     close(img_fd);
-
     return 0;
 }
 

@@ -46,8 +46,8 @@ Test on real hardware
 [x] volume metadata
 [x] hidden volume size option
 
-[ ] format normal volume
-[ ] format hidden volume
+[x] format normal volume
+[x] format hidden volume
 [ ] mount normal volume
 [ ] mount hidden volume
 
