@@ -1,5 +1,6 @@
 // gcc -Wall -Wextra -o fake_usb allocate.c
-// ./fake_usb create fake_usb.img 5G
+// ./fake_usb create fake_usb.img 5G (for no hidden)
+// ./fake_usb create fake_usb.img 5G --hidden 2G
 // ./fake_usb info fake_usb.img
 
 #define _FILE_OFFSET_BITS 64
@@ -11,12 +12,18 @@
 #include <string.h>
 #include <stdint.h>
 
-// force 1 byte
+
 typedef struct __attribute__((packed)) {
-    char magic[8];      // 8 bytes
-    uint32_t version;   // 4 bytes
-    uint32_t data_offset; // 4 bytes
-} Header; // 16 bytes
+    char magic[8];
+    uint32_t version;
+
+    uint64_t normal_offset;
+    uint64_t normal_size;
+
+    uint64_t hidden_offset;
+    uint64_t hidden_size;
+
+} Header;
 
 off_t parse_size(const char *size_str) {
     char *endptr;
@@ -40,19 +47,14 @@ off_t parse_size(const char *size_str) {
     }
 }
 
-int write_header(int fd) {
-    Header header = {
-        .magic = "SAFEUSB",
-        .version = 1,
-        .data_offset = 4096
-    };
-
+int write_header(int fd, Header *header) {
+    
     // add err handling later
 
     // set to first (0) btye 
     lseek(fd, 0, SEEK_SET);
 
-    write(fd, &header, sizeof(header));
+    write(fd, header, sizeof(header));
     fsync(fd);
 
     return 0;
@@ -70,7 +72,7 @@ int read_header(int fd, Header *header) {
     return 0;
 }
 
-int allocate(const char *file_name, off_t size){
+int allocate(const char *file_name, off_t size, off_t hidden_size){
     int fd = open(
         file_name, 
         O_RDWR | O_CREAT | O_TRUNC, 
@@ -87,7 +89,32 @@ int allocate(const char *file_name, off_t size){
         return 1;
     }
 
-    write_header(fd);
+    Header header = {0};
+
+    memcpy(header.magic, "SAFEUSB", 7);
+    header.version = 1;
+
+    header.normal_offset = sizeof(Header);
+
+    if (hidden_size > 0) {
+
+        header.hidden_size = hidden_size;
+
+        header.normal_size = size - hidden_size;
+
+        header.hidden_offset =
+            header.normal_offset + header.normal_size;
+
+    } else {
+
+        header.normal_size = size;
+
+        header.hidden_size = 0;
+        header.hidden_offset = 0;
+
+    }
+
+    write_header(fd, &header);
 
     close(fd);
 
@@ -99,7 +126,16 @@ int allocate(const char *file_name, off_t size){
 void print_header(const Header *header){
     printf("magic: %.8s\n", header->magic);
     printf("version: %u\n", header->version);
-    printf("data offset: %u\n", header->data_offset);
+
+    printf("\nNormal volume:\n");
+    printf("offset: %lu\n", header->normal_offset);
+    printf("size: %lu\n", header->normal_size);
+
+    if (header->hidden_size > 0) {
+        printf("\nhidden volume:\n");
+        printf("offset: %lu\n", header->hidden_offset);
+        printf("size: %lu\n", header->hidden_size);
+    }
 }
 
 int info(const char *file_name) {
@@ -109,7 +145,7 @@ int info(const char *file_name) {
             return 1;
         }
 
-        Header header;
+        Header header = {0};
         
         if (read_header(fd, &header) != 0) {
             printf("not a SAFEUSB image.\n");
@@ -124,11 +160,13 @@ int info(const char *file_name) {
         return 0;
 }
 
+//int format(){}
+
 int main(int argc, char *argv[]){
     if (argc < 2) {
         goto usage; }
     else if (strcmp(argv[1], "create") == 0) {
-        if (argc != 4)
+        if (argc != 4 && argc != 6)
             goto usage;
     }
     else if (strcmp(argv[1], "info") == 0) {
@@ -143,7 +181,16 @@ int main(int argc, char *argv[]){
 
     if (strcmp(argv[1], "create") == 0) {
         off_t size = parse_size(argv[3]);
-        return allocate(file_name, size);
+
+    off_t hidden_size = 0;
+
+    if (argc == 6 &&
+        strcmp(argv[4], "--hidden") == 0)
+    {
+        hidden_size = parse_size(argv[5]);
+    }
+
+    return allocate(file_name, size, hidden_size);
     } else if (strcmp(argv[1], "info") == 0) {
         return info(file_name);
     } else {
