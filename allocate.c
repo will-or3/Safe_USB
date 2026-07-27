@@ -2,7 +2,8 @@
 // ./fake_usb create fake_usb.img 5G (for no hidden)
 // ./fake_usb create fake_usb.img 5G --hidden 2G
 // ./fake_usb info fake_usb.img
-// sudo ./fake_usb format fake_usb.img
+// sudo ./fake_usb format fake_usb.img (keep running and mount in another terminal)
+// sudo ./fake_usb mount fake_usb.img
 
 #define _FILE_OFFSET_BITS 64
 
@@ -285,6 +286,96 @@ int format(const char *file_name){
     return 0;
 }
 
+int mount_volume(const char *file_name, uint64_t offset, uint64_t size, const char *mount_point)
+{
+    int loop_num = get_loop_device();
+
+    if (loop_num < 0) {
+        return 1;
+    }
+
+    char loop_path[64];
+
+    snprintf(loop_path, sizeof(loop_path), "/dev/loop%d", loop_num);
+    printf("using %s\n", loop_path);
+
+
+    int img_fd = open(file_name, O_RDWR);
+
+    if (img_fd < 0) {
+        perror("image open");
+        return 1;
+    }
+
+    int loop_fd = open(loop_path, O_RDWR);
+
+    if (loop_fd < 0) {
+        perror("loop open");
+        close(img_fd);
+        return 1;
+    }
+
+   struct loop_config config = {0};
+
+    config.fd = img_fd;
+    config.block_size = 4096;
+
+    config.info.lo_offset = offset;
+    config.info.lo_sizelimit = size;
+
+
+    if (ioctl(loop_fd, LOOP_CONFIGURE, &config) < 0) {
+        perror("LOOP_CONFIGURE");
+        return 1;
+    }
+
+    // mount filesystem
+
+    if (mount(
+            loop_path,
+            mount_point,
+            "ext4",
+            0,
+            NULL
+        ) < 0) {
+
+        perror("mount error");
+        return 1;
+    }
+
+
+    printf("\nmounted %s at %s\n", loop_path, mount_point);
+
+    close(loop_fd);
+    close(img_fd);
+
+    return 0;
+}
+
+int mount(const char *file_name)
+{
+    int fd = open(file_name, O_RDONLY);
+
+    Header header;
+
+    if (read_header(fd, &header) != 0) {
+        printf("Not a SAFEUSB image\n");
+        close(fd);
+        return 1;
+    }
+
+
+    mount_volume(
+        file_name,
+        header.normal_offset,
+        header.normal_size,
+        "/mnt"
+    );
+    close(fd);
+
+    return 0;
+}
+
 int main(int argc, char *argv[]){
     if (argc < 2) {
         goto usage; }
@@ -298,6 +389,10 @@ int main(int argc, char *argv[]){
     } else if (strcmp(argv[1], "format") == 0) {
         if (argc != 3)
             goto usage; 
+    } 
+    else if (strcmp(argv[1], "mount") == 0) {
+        if (argc != 3)
+            goto usage;
     } else {
         goto usage;
     }
@@ -321,6 +416,9 @@ int main(int argc, char *argv[]){
     }
     else if (strcmp(argv[1], "format") == 0) {
         return format(file_name); 
+    } 
+    else if (strcmp(argv[1], "mount") == 0) {
+        return mount(file_name);
     }
      else {
         goto usage;
