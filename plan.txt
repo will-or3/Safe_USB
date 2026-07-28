@@ -48,8 +48,8 @@ Test on real hardware
 
 [x] format normal volume
 [x] format hidden volume
-[ ] mount normal volume
-[ ] mount hidden volume
+[x] mount normal volume
+[x] mount hidden volume
 
 [ ] add encryption
 [ ] add password handling

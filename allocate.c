@@ -4,6 +4,7 @@
 // ./fake_usb info fake_usb.img
 // sudo ./fake_usb format fake_usb.img (keep running and mount in another terminal)
 // sudo ./fake_usb mount fake_usb.img
+// sudo ./fake_usb unmount
 
 #define _FILE_OFFSET_BITS 64
 
@@ -182,27 +183,25 @@ int get_loop_device(){
     return number;
 }
 
-
-int format_volume(const char *file_name, uint64_t offset, uint64_t size){
-
-    // get free loop device
+// loop helper
+int setup_loop(
+    const char *image,
+    uint64_t offset,
+    uint64_t size,
+    char *loop_path,
+    size_t path_size
+){
     int loop_num = get_loop_device();
+    
+    snprintf(
+        loop_path,
+        path_size,
+        "/dev/loop%d",
+        loop_num
+    );
 
-    if (loop_num < 0) {
-        return 1;
-    }
-
-    char loop_path[64];
-
-    snprintf(loop_path, sizeof(loop_path), "/dev/loop%d", loop_num);
-
-    printf("useing %s\n", loop_path);
-
-    int img_fd = open(file_name, O_RDWR);
-
+    int img_fd = open(image, O_RDWR);
     int loop_fd = open(loop_path, O_RDWR);
-
-    // configure loop device
 
     struct loop_config config = {0};
 
@@ -212,47 +211,56 @@ int format_volume(const char *file_name, uint64_t offset, uint64_t size){
     config.info.lo_offset = offset;
     config.info.lo_sizelimit = size;
 
-    //ioctl(loop_fd, LOOP_CONFIGURE, &config);
-    if (ioctl(loop_fd, LOOP_CONFIGURE, &config) < 0) {
-        perror("LOOP_CONFIGURE");
-        close(loop_fd);
-        close(img_fd);
+    ioctl(loop_fd, LOOP_CONFIGURE, &config);
+
+    close(loop_fd);
+    close(img_fd);
+
+    return 0;
+}
+
+int detach_loop(const char *loop_path){
+    int fd = open(loop_path, O_RDWR);
+
+    if (fd < 0) {
+        perror("open loop");
         return 1;
     }
 
-    // run mkfs.ext4
+    ioctl(fd, LOOP_CLR_FD, 0);
+    close(fd);
 
-     pid_t pid = fork();
+    return 0;
+}
+
+int format_volume(const char *file_name, uint64_t offset, uint64_t size){
+
+    char loop_path[64];
+
+    setup_loop(file_name, offset, size, loop_path, sizeof(loop_path));
+
+    pid_t pid = fork();
 
     if (pid == 0) {
-
-        execlp(
-            "mkfs.ext4",
+        execlp("mkfs.ext4",
             "mkfs.ext4",
             loop_path,
-            NULL
-        );
+            NULL);
 
         perror("mkfs.ext4");
         exit(1);
     }
 
-    wait(NULL);
+    
+    waitpid(pid, NULL, 0);
 
+    detach_loop(loop_path);
 
-    wait(NULL);
-
-    printf("Filesystem created on %s\n", loop_path);
-    printf("Press enter to detach loop device...\n");
-    getchar();
-    ioctl(loop_fd, LOOP_CLR_FD, 0);
-
-    close(loop_fd);
-    close(img_fd);
     return 0;
+
 }
 
-int format(const char *file_name){
+int format_img(const char *file_name){
     int fd = open(file_name, O_RDWR);
     
     Header header;
@@ -286,74 +294,39 @@ int format(const char *file_name){
     return 0;
 }
 
-int mount_volume(const char *file_name, uint64_t offset, uint64_t size, const char *mount_point)
-{
-    int loop_num = get_loop_device();
 
-    if (loop_num < 0) {
-        return 1;
-    }
-
+int mount_volume(const char *file_name, uint64_t offset, 
+    uint64_t size, const char *mount_point){
+    
     char loop_path[64];
 
-    snprintf(loop_path, sizeof(loop_path), "/dev/loop%d", loop_num);
-    printf("using %s\n", loop_path);
+    setup_loop(file_name, offset, size, loop_path, sizeof(loop_path));
 
+    mount(
+        loop_path,
+        mount_point,
+        "ext4",
+        0,
+        NULL
+    );
 
-    int img_fd = open(file_name, O_RDWR);
+     printf("mounted %s at %s\n", loop_path, mount_point);
 
-    if (img_fd < 0) {
-        perror("image open");
+     FILE *f = fopen("/tmp/safeusb-normal.loop", "w");
+    if (!f) {
+        perror("fopen");
         return 1;
     }
 
-    int loop_fd = open(loop_path, O_RDWR);
+    fprintf(f, "%s\n", loop_path);
+    fclose(f);
 
-    if (loop_fd < 0) {
-        perror("loop open");
-        close(img_fd);
-        return 1;
-    }
-
-   struct loop_config config = {0};
-
-    config.fd = img_fd;
-    config.block_size = 4096;
-
-    config.info.lo_offset = offset;
-    config.info.lo_sizelimit = size;
-
-
-    if (ioctl(loop_fd, LOOP_CONFIGURE, &config) < 0) {
-        perror("LOOP_CONFIGURE");
-        return 1;
-    }
-
-    // mount filesystem
-
-    if (mount(
-            loop_path,
-            mount_point,
-            "ext4",
-            0,
-            NULL
-        ) < 0) {
-
-        perror("mount error");
-        return 1;
-    }
-
-
-    printf("\nmounted %s at %s\n", loop_path, mount_point);
-
-    close(loop_fd);
-    close(img_fd);
+// don't detach here
 
     return 0;
 }
 
-int mount(const char *file_name)
-{
+int mount_img(const char *file_name){
     int fd = open(file_name, O_RDONLY);
 
     Header header;
@@ -376,6 +349,37 @@ int mount(const char *file_name)
     return 0;
 }
 
+
+int unmount_volume(const char *mount_point){
+    
+    char loop_path[64];
+
+    FILE *f = fopen("/tmp/safeusb-normal.loop", "r");
+    if (!f) {
+        perror("fopen");
+        return 1;
+    }
+
+
+    if (fgets(loop_path, sizeof(loop_path), f) == NULL) {
+        fclose(f);
+        fprintf(stderr, "couldnt read loop file\n");
+        return 1;
+    }
+
+    fclose(f);
+
+    loop_path[strcspn(loop_path, "\n")] = '\0';
+
+    umount(mount_point);
+
+    detach_loop(loop_path);
+
+    remove("/tmp/safeusb-normal.loop");
+
+    return 0;
+}
+
 int main(int argc, char *argv[]){
     if (argc < 2) {
         goto usage; }
@@ -393,6 +397,9 @@ int main(int argc, char *argv[]){
     else if (strcmp(argv[1], "mount") == 0) {
         if (argc != 3)
             goto usage;
+    } else if (strcmp(argv[1], "unmount") == 0) {
+        if (argc != 2)
+        goto usage;
     } else {
         goto usage;
     }
@@ -415,10 +422,12 @@ int main(int argc, char *argv[]){
         return info(file_name);
     }
     else if (strcmp(argv[1], "format") == 0) {
-        return format(file_name); 
+        return format_img(file_name); 
     } 
     else if (strcmp(argv[1], "mount") == 0) {
-        return mount(file_name);
+        return mount_img(file_name);
+    } else if (strcmp(argv[1], "unmount") == 0) {
+        return unmount_volume("/mnt");
     }
      else {
         goto usage;
