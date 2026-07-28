@@ -357,11 +357,20 @@ int mount_img(const char *file_name, const char *volume){
         if (header.hidden_size == 0) {
             printf("No hidden volume exists\n");
             return 1;
-        } }
-        else {
-            return 1;
         }
-    return 0;
+
+        return mount_volume(
+            file_name,
+            header.hidden_offset,
+            header.hidden_size,
+            "/mnt",
+            "/tmp/safeusb-hidden.loop"
+        );
+    }
+
+    else {
+        return 1;
+    }
 }
 
 
@@ -374,7 +383,6 @@ int unmount_volume(const char *mount_point, const char *loop_file){
         perror("fopen");
         return 1;
     }
-
 
     if (fgets(loop_path, sizeof(loop_path), f) == NULL) {
         fclose(f);
@@ -390,7 +398,7 @@ int unmount_volume(const char *mount_point, const char *loop_file){
 
     detach_loop(loop_path);
 
-    remove("/tmp/safeusb-normal.loop");
+    remove(loop_file);
 
     return 0;
 }
