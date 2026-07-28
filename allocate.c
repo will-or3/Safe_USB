@@ -400,10 +400,10 @@ int unmount_volume(const char *mount_point, const char *loop_file){
 
     remove(loop_file);
 
+    printf("unmounted %s\n", loop_path);
+
     return 0;
 }
-
-int mount_normal(const char *file)
 
 int main(int argc, char *argv[]){
     if (argc < 2) {
@@ -452,7 +452,7 @@ int main(int argc, char *argv[]){
     else if (strcmp(argv[1], "mount") == 0) {
         return mount_img(file_name, argv[3]);
     } else if (strcmp(argv[1], "unmount") == 0) {
-        return unmount_volume("/mnt");
+        return unmount_volume("/mnt", "/tmp/safeusb.loop");
     }
      else {
         goto usage;
