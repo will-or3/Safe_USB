@@ -3,7 +3,7 @@
 // ./fake_usb create fake_usb.img 5G --hidden 2G
 // ./fake_usb info fake_usb.img
 // sudo ./fake_usb format fake_usb.img (keep running and mount in another terminal)
-// sudo ./fake_usb mount fake_usb.img
+// sudo ./fake_usb mount fake_usb.img normal/hidden
 // sudo ./fake_usb unmount
 
 #define _FILE_OFFSET_BITS 64
@@ -295,8 +295,12 @@ int format_img(const char *file_name){
 }
 
 
-int mount_volume(const char *file_name, uint64_t offset, 
-    uint64_t size, const char *mount_point){
+int mount_volume(
+    const char *file_name, 
+    uint64_t offset, 
+    uint64_t size, 
+    const char *mount_point,
+    const char *loop_file){
     
     char loop_path[64];
 
@@ -312,7 +316,7 @@ int mount_volume(const char *file_name, uint64_t offset,
 
      printf("mounted %s at %s\n", loop_path, mount_point);
 
-     FILE *f = fopen("/tmp/safeusb-normal.loop", "w");
+    FILE *f = fopen(loop_file, "w");
     if (!f) {
         perror("fopen");
         return 1;
@@ -326,7 +330,7 @@ int mount_volume(const char *file_name, uint64_t offset,
     return 0;
 }
 
-int mount_img(const char *file_name){
+int mount_img(const char *file_name, const char *volume){
     int fd = open(file_name, O_RDONLY);
 
     Header header;
@@ -337,24 +341,35 @@ int mount_img(const char *file_name){
         return 1;
     }
 
-
-    mount_volume(
-        file_name,
-        header.normal_offset,
-        header.normal_size,
-        "/mnt"
-    );
     close(fd);
 
+    if (strcmp(volume, "normal") == 0) {
+        return mount_volume(
+            file_name,
+            header.normal_offset,
+            header.normal_size,
+            "/mnt",
+            "/tmp/safeusb-normal.loop"
+        );
+    } 
+    
+    else if (strcmp(volume, "hidden") == 0) {
+        if (header.hidden_size == 0) {
+            printf("No hidden volume exists\n");
+            return 1;
+        } }
+        else {
+            return 1;
+        }
     return 0;
 }
 
 
-int unmount_volume(const char *mount_point){
+int unmount_volume(const char *mount_point, const char *loop_file){
     
     char loop_path[64];
 
-    FILE *f = fopen("/tmp/safeusb-normal.loop", "r");
+    FILE *f = fopen(loop_file, "r");
     if (!f) {
         perror("fopen");
         return 1;
@@ -380,6 +395,8 @@ int unmount_volume(const char *mount_point){
     return 0;
 }
 
+int mount_normal(const char *file)
+
 int main(int argc, char *argv[]){
     if (argc < 2) {
         goto usage; }
@@ -395,7 +412,7 @@ int main(int argc, char *argv[]){
             goto usage; 
     } 
     else if (strcmp(argv[1], "mount") == 0) {
-        if (argc != 3)
+        if (argc != 4)
             goto usage;
     } else if (strcmp(argv[1], "unmount") == 0) {
         if (argc != 2)
@@ -425,7 +442,7 @@ int main(int argc, char *argv[]){
         return format_img(file_name); 
     } 
     else if (strcmp(argv[1], "mount") == 0) {
-        return mount_img(file_name);
+        return mount_img(file_name, argv[3]);
     } else if (strcmp(argv[1], "unmount") == 0) {
         return unmount_volume("/mnt");
     }
@@ -437,7 +454,7 @@ int main(int argc, char *argv[]){
         fprintf(stderr, "Usage: %s create <filename> <size[K|M|G]>\n", argv[0]);
         fprintf(stderr, "Usage: %s info <filename>\n", argv[0]);
         fprintf(stderr, "Usage: %s format <filename>\n", argv[0]);
-        fprintf(stderr, "Usage: %s mount <filename>\n", argv[0]);
+        fprintf(stderr, "Usage: %s mount <filename> normal/hidden\n", argv[0]);
         fprintf(stderr, "Usage: %s unmount\n", argv[0]);
         return 1;
 }
