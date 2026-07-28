@@ -437,5 +437,7 @@ int main(int argc, char *argv[]){
         fprintf(stderr, "Usage: %s create <filename> <size[K|M|G]>\n", argv[0]);
         fprintf(stderr, "Usage: %s info <filename>\n", argv[0]);
         fprintf(stderr, "Usage: %s format <filename>\n", argv[0]);
+        fprintf(stderr, "Usage: %s mount <filename>\n", argv[0]);
+        fprintf(stderr, "Usage: %s unmount\n", argv[0]);
         return 1;
 }
