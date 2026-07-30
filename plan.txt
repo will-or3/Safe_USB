@@ -63,6 +63,6 @@ Test on real hardware
 [x] add encryption
 [x] add password handling
 [x] add unlock process
-[ ] add self-destruct behavior
+[x] add self-destruct behavior
 
 [ ] real USB 
