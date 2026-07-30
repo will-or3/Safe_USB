@@ -76,18 +76,14 @@ void random_bytes(void *buf, size_t len) {
 }
 
 int derive_key(const char *password, const uint8_t *salt, uint8_t *key) {
-    return argon2id_hash_raw(3, 1<<16, 1,
-                             password, strlen(password),
-                             salt, SALT_LEN,
-                             key, KEY_LEN);
+    return argon2id_hash_raw(3, 1<<16, 1, password, strlen(password),
+                             salt, SALT_LEN, key, KEY_LEN);
 }
 
 void hash_password(const char *password, const uint8_t salt[SALT_LEN],
                    uint8_t hash[HASH_LEN]) {
-    argon2id_hash_raw(3, 1<<16, 1,
-                      password, strlen(password),
-                      salt, SALT_LEN,
-                      hash, HASH_LEN);
+    argon2id_hash_raw(3, 1<<16, 1, password, strlen(password), 
+                      salt, SALT_LEN,hash, HASH_LEN);
 }
 
 int verify_password(const char *password, const uint8_t salt[SALT_LEN],
@@ -461,7 +457,28 @@ int mount_volume(const char *image, uint64_t offset, uint64_t size,
 }
 
 void duress_action(void) {
-    printf("Duress action triggered\n");
+    int fd = open(file, O_RDWR);
+
+    Header hdr;
+    if (read_header(fd, &hdr) != 0) {
+        fprintf(stderr, "self destruct not a SAFEUSB image\n");
+        close(fd);
+        return;
+    }
+
+    // overwrite
+    random_bytes(hdr.hidden_nonce, sizeof(hdr.hidden_nonce));
+    random_bytes(hdr.hidden_key_enc, sizeof(hdr.hidden_key_enc));
+    random_bytes(hdr.hidden_hash, sizeof(hdr.hidden_hash));
+    random_bytes(hdr.hidden_salt, sizeof(hdr.hidden_salt));
+
+    if (write_header(fd, &hdr) != 0) {
+        fprintf(stderr, "Self-destruct: failed to write header\n");
+    } else {
+        printf("Hidden volume permanently destroyed.\n");
+    }
+
+    close(fd);
 }
 
 int mount_img(const char *file, const char *password) {
@@ -494,7 +511,7 @@ int mount_img(const char *file, const char *password) {
         return mount_volume(file, hdr.hidden_offset, hdr.hidden_size,
                             "/mnt", "/tmp/safeusb.loop", volume_key);
     case MODE_DURESS:
-        duress_action();
+        duress_action(file_name);
         return 0;
     default:
         return 1;
@@ -582,7 +599,7 @@ int main(int argc, char *argv[]) {
 
         off_t fallback_total = parse_size(size_str);
         if (fallback_total <= 0) {
-            fprintf(stderr, "Invalid size: %s\n", size_str);
+            fprintf(stderr, "invalid size:%s\n", size_str);
             return 1;
         }
 
@@ -591,30 +608,29 @@ int main(int argc, char *argv[]) {
             if (argc < 7) goto usage;
             hidden_size = parse_size(argv[6]);
             if (hidden_size <= 0) {
-                fprintf(stderr, "Invalid hidden size: %s\n", argv[6]);
+                fprintf(stderr, "invalid hidden size:%s\n", argv[6]);
                 return 1;
             }
         }
 
-        // Initialise if needed
         if (probe_and_init(target, hidden_size, fallback_total) != 0) {
-            fprintf(stderr, "Initialisation failed\n");
+            fprintf(stderr, "initialisation failed\n");
             return 1;
         }
 
-        // Mount with the given password
+        // mount with the given password
         return mount_img(target, password);
     }
 
     if (strcmp(cmd, "create") == 0) {
         if (argc < 4) goto usage;
         off_t total = parse_size(argv[3]);
-        if (total <= 0) { fprintf(stderr, "Bad size\n"); return 1; }
+        if (total <= 0) { fprintf(stderr, "bad size\n"); return 1; }
         off_t hidden = 0;
         if (argc >= 5 && strcmp(argv[4], "--hidden") == 0) {
             if (argc < 6) goto usage;
             hidden = parse_size(argv[5]);
-            if (hidden <= 0) { fprintf(stderr, "Bad hidden size\n"); return 1; }
+            if (hidden <= 0) { fprintf(stderr, "bad hidden size\n"); return 1; }
         }
         return allocate(argv[2], total, hidden);
     }
