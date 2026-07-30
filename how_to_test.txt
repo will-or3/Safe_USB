@@ -1,0 +1,13 @@
+sudo ./fake_usb create test.img 5G --hidden 2G
+sudo ./fake_usb format test.img
+
+sudo ./fake_usb mount test.img hidden123
+echo "secret" | sudo tee /mnt/secret.txt
+sudo ./fake_usb unmount
+
+sudo ./fake_usb mount test.img duress123
+
+sudo ./fake_usb mount test.img hidden123
+
+sudo ./fake_usb mount test.img normal123
+ls /mnt
