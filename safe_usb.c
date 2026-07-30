@@ -1,13 +1,13 @@
-// fake_usb.c
-// Build: gcc -Wall -Wextra -o fake_usb fake_usb.c -largon2 -lsodium
+// safe_usb.c
+// Build: gcc -Wall -Wextra -o safe_usb safe_usb.c -largon2 -lsodium
 // Usage:
-//   ./fake_usb auto <target> <size> <password> [--hidden hidden_size]
+//   ./safe_usb auto <target> <size> <password> [--hidden hidden_size]
 //       size required when creating a new file image, ignored for block devices.
-//   ./fake_usb create <file> <size> [--hidden <hidden_size>]
-//   ./fake_usb info <file>
-//   ./fake_usb format <file>
-//   ./fake_usb mount <file> <password>
-//   ./fake_usb unmount
+//   ./safe_usb create <file> <size> [--hidden <hidden_size>]
+//   ./safe_usb info <file>
+//   ./safe_usb format <file>
+//   ./safe_usb mount <file> <password>
+//   ./safe_usb unmount
 
 #define _GNU_SOURCE
 #define _FILE_OFFSET_BITS 64
