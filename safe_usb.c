@@ -271,10 +271,10 @@ int allocate(const char *file, off_t total, off_t hidden) {
 
     if (hidden > 0) {
         hdr.hidden_size = hidden;
-        hdr.normal_size = total - hidden;
+        hdr.normal_size = total - 4096 - hidden;
         hdr.hidden_offset = hdr.normal_offset + hdr.normal_size;
     } else {
-        hdr.normal_size = total;
+        hdr.normal_size = total - 4096;
         hdr.hidden_size = 0;
         hdr.hidden_offset = 0;
     }
@@ -314,10 +314,10 @@ int write_initial_header(int fd, off_t total, off_t hidden) {
 
     if (hidden > 0) {
         hdr.hidden_size = hidden;
-        hdr.normal_size = total - hidden;
+        hdr.normal_size = total - 4096 - hidden;
         hdr.hidden_offset = hdr.normal_offset + hdr.normal_size;
     } else {
-        hdr.normal_size = total;
+        hdr.normal_size = total - 4096;
         hdr.hidden_size = 0;
         hdr.hidden_offset = 0;
     }
@@ -350,6 +350,16 @@ int format_volume(const char *file, uint64_t offset, uint64_t size) {
     char loop[64];
     if (setup_loop(file, offset, size, loop, sizeof(loop)) != 0)
         return -1;
+
+    // you dont need this on .img files because they dont have existing file systems
+    // but usb's might have filesystems before, learned this the hard way
+    pid_t pid = fork();
+    if (pid == 0) {
+        execlp("wipefs", "wipefs", "-a", loop, NULL);
+        perror("wipefs");
+        _exit(1);
+    }
+    waitpid(pid, NULL, 0);
 
     pid_t pid = fork();
     if (pid == 0) {
@@ -426,7 +436,7 @@ int mount_volume(const char *image, uint64_t offset, uint64_t size,
         return 1;
 
     const char *mapper = "safeusb";
-    if (create_dm_mapping(loop, volume_key, 0, mapper) != 0) {
+    if (create_dm_mapping(loop, volume_key, size / 512, mapper) != 0) {
         detach_loop(loop);
         return 1;
     }
