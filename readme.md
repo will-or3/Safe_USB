@@ -1,5 +1,6 @@
 ---
 ### references
-- https://man.archlinux.org/man/fcntl.h.0p.en
-- https://pubs.opengroup.org/onlinepubs/9699919799/basedefs/sys_stat.h.html
-- https://man7.org/linux/man-pages/man2/ioctl.2.html
+- https://libsodium.gitbook.io/doc/secret-key_cryptography/secretbox
+- https://github.com/P-H-C/phc-winner-argon2/blob/master/include/argon2.h
+- https://doc.libsodium.org/quickstart#how-do-i-encrypt-a-file-using-a-password
+- https://github.com/torvalds/linux/blob/master/Documentation/admin-guide/device-mapper/dm-crypt.rst
