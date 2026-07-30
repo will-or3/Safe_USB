@@ -1,6 +1,15 @@
 Lets make a plan on this one,
 
 
+my initial dream design:
+- 1 command.
+- detect whether a USB/image is already initialized.
+- if not, initialize it.
+- three passwords:
+    - normal -> mount normal encrypted volume
+    - hidden -> mount hidden encrypted volume
+    - duress -> self destruct
+
 Design:
 
 Checks if the proprietary header exists (random and tied to file) [so it can see if its already there]
@@ -51,9 +60,9 @@ Test on real hardware
 [x] mount normal volume
 [x] mount hidden volume
 
-[ ] add encryption
-[ ] add password handling
-[ ] add unlock process
+[x] add encryption
+[x] add password handling
+[x] add unlock process
 [ ] add self-destruct behavior
 
 [ ] real USB 
